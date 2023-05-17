@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {
+            background-color: gray !important;
+        }
+        #gameScreen {
+            width: 800px;
+            height: 600px;
+            border: 1px solid black;
+            position: relative;
+            background-color: black !important;
+            margin: auto;
+        }
+        .player, .alien, .bullet {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+        }
+        .alienBullet {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: yellow;
+            border-radius: 50%;
+        }
+        .player { background: blue; bottom: 0; }
+        .alien { background: red; }
+        .bullet { background: green; border-radius: 50%;}
+    </style>
+</head>
+<body>
+    <div id="gameScreen"></div>
+    <div id="score">Score: 0</div>
+    <div id="lives">Lives: 3</div>
+    <script>
+        const gameScreen = document.getElementById('gameScreen');
+        const player = document.createElement('div');
+        player.className = 'player';
+        gameScreen.appendChild(player);
+        let score = 0;
+        let lives = 3;
+
+        let playerPos = { x: 390 };
+
+        const aliens = [];
+        const bullets = [];
+        const keyState = {};
+        const alienBullets = [];
+
+        const alienRows = 2;
+        const alienPerRow = 10;
+
+        let bulletCounter = 0;
+        const maxBullets = 5;
+        
+        let alienDirection = 1;
+        let canShoot = true; // New variable for shooting cooldown
+
+        //hights
+        const alienHeight = 20;
+        const bulletHeight = 20;
+        const playerHeight = 20;
+        const gameScreenHeight = 600;
+
+// Create aliens
+for (let row = 0; row < alienRows; row++) {
+    for (let i = 0; i < alienPerRow; i++) {
+        const alien = document.createElement('div');
+        alien.className = 'alien';
+        gameScreen.appendChild(alien);
+        aliens.push({ x: i * 50, y: row * 40, el: alien });
+    }
+}
+setInterval(() => {
+    if (aliens.length > 0 && alienBullets.length < maxBullets) { // Adjusted the condition to count only alien bullets
+        const randomAlien = aliens[Math.floor(Math.random() * aliens.length)];
+        const alienBullet = document.createElement('div');
+        alienBullet.className = 'alienBullet';
+        alienBullet.style.left = `${randomAlien.x}px`;
+        alienBullet.style.top = `${randomAlien.y + alienHeight}px`; // Adjusted the y-coordinate
+        gameScreen.appendChild(alienBullet);
+        alienBullets.push({ x: randomAlien.x, y: randomAlien.y + alienHeight, el: alienBullet }); // Adjusted the y-coordinate
+    }
+}, 1000);
+
+
+
+window.addEventListener('keydown', (e) => {
+    keyState[e.code] = true;
+});
+
+window.addEventListener('keyup', (e) => {
+    keyState[e.code] = false;
+});
+
+function gameLoop() {
+    // Move player
+    player.style.left = `${playerPos.x}px`;
+    // Check key states and move player
+    if (keyState['KeyA'] || keyState['ArrowLeft']) {
+        playerPos.x -= 5;
+    }
+    if (keyState['KeyD'] || keyState['ArrowRight']) {
+        playerPos.x += 5;
+    }
+    if (keyState['Space']) {
+        // Fire bullet
+        if (canShoot) {
+            const bullet = document.createElement('div');
+            bullet.className = 'bullet';
+            bullet.style.left = `${playerPos.x}px`;
+            bullet.style.bottom = `${playerHeight}px`; // The bullet starts from the player's top edge
+            gameScreen.appendChild(bullet);
+            bullets.push({ x: playerPos.x, y: gameScreenHeight - playerHeight, el: bullet }); // y is set to gameScreenHeight - playerHeight initially
+            canShoot = false;
+            setTimeout(() => canShoot = true, 500); // 0.5 seconds shooting cooldown
+        }
+    }
+    // Prevent the player from going out of the game screen
+    playerPos.x = Math.max(0, Math.min(780, playerPos.x));
+    if (keyState['Enter']) {
+        resetGame();
+    }
+    // Move aliens
+    aliens.forEach((alien, index) => {
+    if (alien) {
+        alien.x += alienDirection;
+        alien.el.style.left = `${alien.x}px`;
+        alien.el.style.top = `${alien.y}px`;
+    }
+});
+
+
+    if (aliens[0].x <= 0 || aliens[aliens.length - 1].x >= 780) {
+        alienDirection *= -1;
+        aliens.forEach(alien => {
+            alien.y += 20; // Aliens move downwards
+        });
+    }
+
+    // Move player bullets and check for collisions
+    bullets.forEach((bullet, bIndex) => {
+        bullet.y -= 5; // Bullets move upwards
+        bullet.el.style.top = `${bullet.y}px`;
+
+        aliens.forEach((alien, aIndex) => {
+            if (bullet.x < alien.x + 20 && bullet.x + 20 > alien.x &&
+                bullet.y < alien.y + 20 && bullet.y + 20 > alien.y) {
+                // Bullet-alien collision detected
+                gameScreen.removeChild(bullet.el);
+                bullets.splice(bIndex, 1);
+                bulletCounter--;
+                gameScreen.removeChild(alien.el);
+                aliens.splice(aIndex, 1);
+                score++;
+                document.getElementById('score').textContent = 'Score: ' + score;
+            }
+        });
+    });
+
+    // Move alien bullets and check for collisions
+    alienBullets.forEach((bullet, index) => {
+        bullet.y += 5;
+        bullet.el.style.top = `${bullet.y}px`;
+        if (bullet.y == gameScreenHeight) {
+        gameScreen.removeChild(bullet.el);
+        alienBullets.splice(index, 1);
+        }
+
+        if (bullet.x < playerPos.x + 20 && bullet.x + 10 > playerPos.x &&
+        bullet.y < gameScreenHeight && bullet.y + 10 > gameScreenHeight - playerHeight) {
+            // Alien bullet-player collision detected
+            gameScreen.removeChild(bullet.el);
+            alienBullets.splice(index, 1);
+            bulletCounter--;
+            lives--;
+            document.getElementById('lives').textContent = 'Lives: ' + lives;
+            if (lives <= 0) {
+                alert('Game Over!');
+                resetGame();
+            }
+        }
+    });
+
+    // End game check
+    if (aliens.length === 0) {
+        alert('You win!');
+        resetGame();
+    }
+
+    aliens.forEach((alien) => {
+        if (alien.y >= gameScreenHeight - playerHeight) {
+            lives--;
+            document.getElementById('lives').textContent = 'Lives: ' + lives;
+            if (lives <= 0) {
+                alert('Game Over!');
+                resetGame();
+            } else {
+                resetRound();
+            }
+        }
+    });
+}
+
+
+function resetGame() {
+    aliens.forEach(alien => {
+        gameScreen.removeChild(alien.el);
+    });
+    aliens.length = 0;
+    bullets.forEach(bullet => {
+        gameScreen.removeChild(bullet.el);
+    });
+    alienBullets.forEach(bullet => {
+        gameScreen.removeChild(bullet.el);
+    });
+    alienBullets.length = 0;
+    bulletCounter = 0;
+    bullets.length = 0;
+    score = 0;
+    lives = 3;
+    document.getElementById('score').textContent = 'Score: ' + score;
+    document.getElementById('lives').textContent = 'Lives: ' + lives;
+    for (let row = 0; row < alienRows; row++) {
+        for (let i = 0; i < alienPerRow; i++) {
+            const alien = document.createElement('div');
+            alien.className = 'alien';
+            gameScreen.appendChild(alien);
+            aliens.push({ x: i * 50, y: row * 40, el: alien });
+        }
+    }
+}
+
+        function resetRound() {
+            aliens.forEach(alien => {
+        gameScreen.removeChild(alien.el);
+    });
+    aliens.length = 0;
+    bullets.forEach(bullet => {
+        gameScreen.removeChild(bullet.el);
+    });
+    alienBullets.forEach(bullet => {
+        gameScreen.removeChild(bullet.el);
+    });
+    alienBullets.length = 0;
+    bulletCounter = 0;
+    bullets.length = 0;
+    score = 0;
+    lives = 3;
+    document.getElementById('score').textContent = 'Score: ' + score;
+    document.getElementById('lives').textContent = 'Lives: ' + lives;
+    for (let row = 0; row < alienRows; row++) {
+        for (let i = 0; i < alienPerRow; i++) {
+            const alien = document.createElement('div');
+            alien.className = 'alien';
+            gameScreen.appendChild(alien);
+            aliens.push({ x: i * 50, y: row * 40, el: alien });
+        }
+    }
+}
+        // Run game loop
+        setInterval(gameLoop, 20);
+    </script>
+</body>
+</html>
