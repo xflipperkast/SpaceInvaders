@@ -2,15 +2,11 @@
 <html>
 <head>
     <style>
-        body {
-            background-color: gray !important;
-        }
         #gameScreen {
             width: 800px;
             height: 600px;
             border: 1px solid black;
             position: relative;
-            background-color: black !important;
             margin: auto;
         }
         .player, .alien, .bullet {
@@ -34,124 +30,144 @@
     <div id="gameScreen"></div>
     <div id="score">Score: 0</div>
     <div id="lives">Lives: 3</div>
+    <div id="gameStatus"></div> <!-- Game Status Display -->
     <script>
-        const gameScreen = document.getElementById('gameScreen');
-        const player = document.createElement('div');
-        player.className = 'player';
-        gameScreen.appendChild(player);
-        let score = 0;
-        let lives = 3;
+// Game Constants
+const alienRows = 2, alienPerRow = 10, maxBullets = 5, moveSpeed = 5;
+const alienHeight = 20, bulletHeight = 20, playerHeight = 20, gameScreenHeight = 600;
+const gameScreen = document.getElementById('gameScreen');
 
-        let playerPos = { x: 390 };
+// Game Variables
+let score = 0, lives = 3, bulletCounter = 0, alienDirection = 1, canShoot = true;
+let playerPos = { x: 390 }, aliens = [], bullets = [], keyState = {}, alienBullets = [];
 
-        const aliens = [];
-        const bullets = [];
-        const keyState = {};
-        const alienBullets = [];
+// Game Elements
+let player = createGameElement('player');
+let alienElement = [...Array(alienRows * alienPerRow)].map(() => createGameElement('alien'));
+let bulletElement = [...Array(maxBullets)].map(() => createGameElement('bullet'));
+let gameStatus = document.getElementById('gameStatus');
+let gameStarted = false;
+gameStatus.textContent = 'Press Enter to Start';
 
-        const alienRows = 2;
-        const alienPerRow = 10;
+// intervals as variables so you can clear them later
+let gameLoopInterval;
+let alienBulletLoopInterval;
 
-        let bulletCounter = 0;
-        const maxBullets = 5;
-        
-        let alienDirection = 1;
-        let canShoot = true; // New variable for shooting cooldown
+// Create Game Elements
+function createGameElement(className) {
+    const el = document.createElement('div');
+    el.className = className;
+    if (className === 'bullet') {
+        el.style.visibility = 'hidden'; // Set the bullet visibility to hidden by default
+    }
+    gameScreen.appendChild(el);
+    return el;
+}
 
-        //hights
-        const alienHeight = 20;
-        const bulletHeight = 20;
-        const playerHeight = 20;
-        const gameScreenHeight = 600;
 
-// Create aliens
+// Set intervals in a new function
+function setIntervals() {
+  clearInterval(gameLoopInterval);
+  clearInterval(alienBulletLoopInterval);
+  
+  gameLoopInterval = setInterval(gameLoop, 20);
+  alienBulletLoopInterval = setInterval(alienBulletLoop, 1000);
+}
+
+
+setIntervals(); // Initialize the game loop
+
+window.addEventListener('keydown', e => {
+    keyState[e.code] = true;
+    if (e.code == 'Enter' && !gameStarted) {
+        gameStarted = true;
+        gameStatus.textContent = '';  // Clear game status text
+        setIntervals();  // Start the intervals
+    }
+});
+window.addEventListener('keyup', e => keyState[e.code] = false);
+
+// Initialize Aliens
 for (let row = 0; row < alienRows; row++) {
     for (let i = 0; i < alienPerRow; i++) {
-        const alien = document.createElement('div');
-        alien.className = 'alien';
-        gameScreen.appendChild(alien);
-        aliens.push({ x: i * 50, y: row * 40, el: alien });
+        aliens.push({ x: i * 50, y: row * 40, el: alienElement.shift() });
     }
 }
-setInterval(() => {
-    if (aliens.length > 0 && alienBullets.length < maxBullets) { // Adjusted the condition to count only alien bullets
-        const randomAlien = aliens[Math.floor(Math.random() * aliens.length)];
-        const alienBullet = document.createElement('div');
-        alienBullet.className = 'alienBullet';
-        alienBullet.style.left = `${randomAlien.x}px`;
-        alienBullet.style.top = `${randomAlien.y + alienHeight}px`; // Adjusted the y-coordinate
-        gameScreen.appendChild(alienBullet);
-        alienBullets.push({ x: randomAlien.x, y: randomAlien.y + alienHeight, el: alienBullet }); // Adjusted the y-coordinate
-    }
-}, 1000);
 
+// Event Listeners
+window.addEventListener('keydown', e => keyState[e.code] = true);
+window.addEventListener('keyup', e => keyState[e.code] = false);
 
-
-window.addEventListener('keydown', (e) => {
-    keyState[e.code] = true;
-});
-
-window.addEventListener('keyup', (e) => {
-    keyState[e.code] = false;
-});
-
+// Game Loop
 function gameLoop() {
-    // Move player
+    if (!gameStarted) return;
+    // Player Movement
+    updatePosition(keyState['KeyA'] || keyState['ArrowLeft'], keyState['KeyD'] || keyState['ArrowRight']);
+    // Player Shooting
+    if (keyState['Space'] && canShoot) shootBullet();
+    // Alien Movement
+    moveAliens();
+    // Check Bullet Collisions
+    checkBulletCollision();
+    // End Game Checks
+    checkEndGame();
+}
+
+// Alien Bullet Loop
+function alienBulletLoop() {
+        if (!gameStarted) return;
+
+        if (aliens.length > 0 && alienBullets.length < maxBullets) shootAlienBullet();
+    }
+
+function updatePosition(left, right) {
+    playerPos.x += right ? moveSpeed : left ? -moveSpeed : 0;
+    playerPos.x = Math.max(0, Math.min(780, playerPos.x));
     player.style.left = `${playerPos.x}px`;
-    // Check key states and move player
-    if (keyState['KeyA'] || keyState['ArrowLeft']) {
-        playerPos.x -= 5;
-    }
-    if (keyState['KeyD'] || keyState['ArrowRight']) {
-        playerPos.x += 5;
-    }
-    if (keyState['Space']) {
-        // Fire bullet
-        if (canShoot) {
-            const bullet = document.createElement('div');
-            bullet.className = 'bullet';
-            bullet.style.left = `${playerPos.x}px`;
-            bullet.style.bottom = `${playerHeight}px`; // The bullet starts from the player's top edge
-            gameScreen.appendChild(bullet);
-            bullets.push({ x: playerPos.x, y: gameScreenHeight - playerHeight, el: bullet }); // y is set to gameScreenHeight - playerHeight initially
-            canShoot = false;
-            setTimeout(() => canShoot = true, 500); // 0.5 seconds shooting cooldown
+}
+
+function shootBullet() {
+    const bullet = createGameElement('bullet'); // Create a new bullet every time the player shoots
+    bullet.style.visibility = 'visible'; // Set the bullet visibility to visible when shooting
+    bullet.style.left = `${playerPos.x}px`;
+    bullet.style.bottom = `${playerHeight}px`;
+    bullets.push({ x: playerPos.x, y: gameScreenHeight - playerHeight, el: bullet });
+    canShoot = false;
+    setTimeout(() => canShoot = true, 500); // 0.5 seconds shooting cooldown
+}
+
+
+function shootAlienBullet() {
+    const randomAlien = aliens[Math.floor(Math.random() * aliens.length)];
+    const alienBullet = createGameElement('alienBullet');
+    alienBullet.style.left = `${randomAlien.x}px`;
+    alienBullet.style.top = `${randomAlien.y + alienHeight}px`;
+    alienBullets.push({ x: randomAlien.x, y: randomAlien.y + alienHeight, el: alienBullet });
+}
+
+function moveAliens() {
+    if (aliens.length > 0) {
+        aliens.forEach(alien => {
+            alien.x += alienDirection;
+            alien.el.style.left = `${alien.x}px`;
+            alien.el.style.top = `${alien.y}px`;
+        });
+        if (aliens[0].x <= 0 || aliens[aliens.length - 1].x >= 780) {
+            alienDirection *= -1;
+            aliens.forEach(alien => alien.y += 20); // Aliens move downwards
         }
     }
-    // Prevent the player from going out of the game screen
-    playerPos.x = Math.max(0, Math.min(780, playerPos.x));
-    if (keyState['Enter']) {
-        resetGame();
-    }
-    // Move aliens
-    aliens.forEach((alien, index) => {
-    if (alien) {
-        alien.x += alienDirection;
-        alien.el.style.left = `${alien.x}px`;
-        alien.el.style.top = `${alien.y}px`;
-    }
-});
+}
 
-
-    if (aliens[0].x <= 0 || aliens[aliens.length - 1].x >= 780) {
-        alienDirection *= -1;
-        aliens.forEach(alien => {
-            alien.y += 20; // Aliens move downwards
-        });
-    }
-
-    // Move player bullets and check for collisions
+function checkBulletCollision() {
+    // Player Bullet Collision
     bullets.forEach((bullet, bIndex) => {
-        bullet.y -= 5; // Bullets move upwards
+        bullet.y -= moveSpeed;
         bullet.el.style.top = `${bullet.y}px`;
-
         aliens.forEach((alien, aIndex) => {
-            if (bullet.x < alien.x + 20 && bullet.x + 20 > alien.x &&
-                bullet.y < alien.y + 20 && bullet.y + 20 > alien.y) {
-                // Bullet-alien collision detected
+            if (isCollision(bullet, alien)) {
                 gameScreen.removeChild(bullet.el);
                 bullets.splice(bIndex, 1);
-                bulletCounter--;
                 gameScreen.removeChild(alien.el);
                 aliens.splice(aIndex, 1);
                 score++;
@@ -160,21 +176,17 @@ function gameLoop() {
         });
     });
 
-    // Move alien bullets and check for collisions
+    // Alien Bullet Collision
     alienBullets.forEach((bullet, index) => {
-        bullet.y += 5;
+        bullet.y += moveSpeed;
         bullet.el.style.top = `${bullet.y}px`;
         if (bullet.y == gameScreenHeight) {
-        gameScreen.removeChild(bullet.el);
-        alienBullets.splice(index, 1);
-        }
-
-        if (bullet.x < playerPos.x + 20 && bullet.x + 10 > playerPos.x &&
-        bullet.y < gameScreenHeight && bullet.y + 10 > gameScreenHeight - playerHeight) {
-            // Alien bullet-player collision detected
             gameScreen.removeChild(bullet.el);
             alienBullets.splice(index, 1);
-            bulletCounter--;
+        }
+        if (isCollision(bullet, { x: playerPos.x, y: gameScreenHeight - playerHeight })) {
+            gameScreen.removeChild(bullet.el);
+            alienBullets.splice(index, 1);
             lives--;
             document.getElementById('lives').textContent = 'Lives: ' + lives;
             if (lives <= 0) {
@@ -183,11 +195,20 @@ function gameLoop() {
             }
         }
     });
+}
 
-    // End game check
+function isCollision(obj1, obj2) {
+    return obj1.x < obj2.x + 20 && obj1.x + 20 > obj2.x &&
+        obj1.y < obj2.y + 20 && obj1.y + 20 > obj2.y;
+}
+
+function checkEndGame() {
     if (aliens.length === 0) {
-        alert('You win!');
-        resetGame();
+        gameStatus.textContent = 'You Win! Press Enter to replay.';
+        gameStarted = false;  // Set the game state to false so the game can be started again
+        clearInterval(gameLoopInterval);
+        clearInterval(alienBulletLoopInterval);
+        resetGame();  // Add this line
     }
 
     aliens.forEach((alien) => {
@@ -195,73 +216,46 @@ function gameLoop() {
             lives--;
             document.getElementById('lives').textContent = 'Lives: ' + lives;
             if (lives <= 0) {
-                alert('Game Over!');
-                resetGame();
+                gameStatus.textContent = 'Game Over! Press Enter to replay.';
+                gameStarted = false;  // Set the game state to false so the game can be started again
+                clearInterval(gameLoopInterval);
+                clearInterval(alienBulletLoopInterval);
+                resetGame();  // Add this line
             } else {
                 resetRound();
             }
         }
     });
 }
-
-
-function resetGame() {
-    aliens.forEach(alien => {
-        gameScreen.removeChild(alien.el);
-    });
-    aliens.length = 0;
-    bullets.forEach(bullet => {
-        gameScreen.removeChild(bullet.el);
-    });
-    alienBullets.forEach(bullet => {
-        gameScreen.removeChild(bullet.el);
-    });
-    alienBullets.length = 0;
-    bulletCounter = 0;
-    bullets.length = 0;
+    function resetGame() {
+    gameStarted = false;
+    // Clear intervals
+    clearInterval(gameLoopInterval);
+    clearInterval(alienBulletLoopInterval);
+    
+    resetRound();
     score = 0;
     lives = 3;
     document.getElementById('score').textContent = 'Score: ' + score;
     document.getElementById('lives').textContent = 'Lives: ' + lives;
-    for (let row = 0; row < alienRows; row++) {
-        for (let i = 0; i < alienPerRow; i++) {
-            const alien = document.createElement('div');
-            alien.className = 'alien';
-            gameScreen.appendChild(alien);
-            aliens.push({ x: i * 50, y: row * 40, el: alien });
-        }
-    }
+
+    gameStatus.textContent = 'Press Enter to Start'; // Indicate that the game is ready
 }
 
-        function resetRound() {
-            aliens.forEach(alien => {
-        gameScreen.removeChild(alien.el);
-    });
-    aliens.length = 0;
-    bullets.forEach(bullet => {
-        gameScreen.removeChild(bullet.el);
-    });
-    alienBullets.forEach(bullet => {
-        gameScreen.removeChild(bullet.el);
-    });
-    alienBullets.length = 0;
+function resetRound() {
+    [...aliens, ...bullets, ...alienBullets].forEach(obj => gameScreen.removeChild(obj.el));
     bulletCounter = 0;
-    bullets.length = 0;
-    score = 0;
-    lives = 3;
-    document.getElementById('score').textContent = 'Score: ' + score;
-    document.getElementById('lives').textContent = 'Lives: ' + lives;
+    aliens = [];
+    bullets = [];
+    alienBullets = [];
+
     for (let row = 0; row < alienRows; row++) {
         for (let i = 0; i < alienPerRow; i++) {
-            const alien = document.createElement('div');
-            alien.className = 'alien';
-            gameScreen.appendChild(alien);
+            const alien = createGameElement('alien');
             aliens.push({ x: i * 50, y: row * 40, el: alien });
         }
     }
 }
-        // Run game loop
-        setInterval(gameLoop, 20);
     </script>
 </body>
 </html>
